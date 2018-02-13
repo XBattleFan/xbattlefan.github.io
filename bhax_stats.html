@@ -1,9 +1,9 @@
 <script>
-	window.replay_id = decodeURIComponent(location.pathname.replace(/.*\//, ''))
-    window.server_path = '/' + location.pathname.match(/\/(.*)\/replays/)[1] + '/'
+	window.replay_id = decodeURIComponent(location.hash.replace(/.*#.*\//, ''))
+    window.server_path = '/' + location.hash.match(/#(.*)\/replays/)[1] + '/'
 </script>
 <head>
-<title>Generals.io Tracker
+<title>Generals.io Tracker-
 </title>
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <meta name="theme-color" content="#ffffff">
