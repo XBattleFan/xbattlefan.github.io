@@ -1,6 +1,6 @@
 <script>
 	window.replay_id = decodeURIComponent(location.hash.replace(/.*#.*\//, ''))
-    window.server_path = '/' + location.hash.match(/#(.*)\/replays/)[1] + '/'
+        window.server_path = '/' + location.hash.match(/#(.*)\/replays/)[1] + '/'
 </script>
 <head>
 <title>Generals.io Tracker-
@@ -152,7 +152,7 @@
 		
         score_turn(replay)
         army_land(replay)
-
+        has_made_move(replay)
         army_land_150(replay)
         total_and_tiles(replay)
 
@@ -275,6 +275,49 @@
         })
         chart.render()
     }
+
+    function has_made_move(replay) {
+        var scoreData = []
+
+        var game = simulator(replay)
+
+        // Simulate the game!
+        while (!game.isOver()) {
+            game.nextTurn();
+            for (i = 0; i < game.sockets.length; i++) { 
+                socket = game.sockets[i]
+                if (!scoreData[i]) {
+                    scoreData[i] = {
+                        fillOpacity : 0.3,
+                        showInLegend: true,
+                        legendMarkerType: "square",
+                        name : socket.gio_username,
+                        type: "area",
+                        dataPoints : []
+                    }
+                }
+                socket.score = $.grep(game.moved, function(e){ return e.i == i; })[0]
+                scoreData[i].dataPoints.push({
+                    x : Math.floor(game.turn / 2),
+                    y : socket.score.moved
+                })
+            }
+        }
+
+        var divName = Math.random().toString(36).substring(7)
+        $("#charts").append('<div id="' + divName + '"></div>')
+        var chart = new CanvasJS.Chart(divName, {
+            title: {
+                text: "cummulative moves each turn"             
+            },
+            axisY: {
+                title: "moves made"
+            },
+            data : scoreData
+        })
+        chart.render()
+    }
+
 
     function army_land(replay) {
         var scoreData = []
@@ -858,6 +901,8 @@
 		this.inputBuffer = [];
 		this.scores = [];
 		this.deaths = [];
+        this.moved = []; //XXX rename
+        this.number_of_moves = [];
 
 		for (var i = 0; i < sockets.length; i++) {
 			this.inputBuffer.push([]);
@@ -865,6 +910,11 @@
 				total: 1,
 				tiles: 1,
 			});
+            this.moved.push({
+				moved: false,
+                i: i
+			});
+            this.number_of_moves.push(0);
 		}
 	}
 
@@ -920,20 +970,6 @@
 
 	// Returns true when the game is over.
 	Game.prototype.update = function() {
-		// Handle buffered attacks.
-		for (var sock = 0; sock < this.sockets.length; sock++) {
-			// Flip priorities every other turn.
-			var i = this.turn % 2 === 0 ? sock : this.sockets.length - 1 - sock;
-
-			while (this.inputBuffer[i].length) {
-				var attack = this.inputBuffer[i].splice(0, 1)[0];
-				if (this.handleAttack(i, attack[0], attack[1], attack[2], attack[3]) !== false) {
-					// This attack wasn't useless.
-					break;
-				}
-			}
-		}
-
 		this.turn++;
 
 		// Increment armies at generals and cities.
@@ -1062,6 +1098,7 @@
 			this.cities.push(end);
 			this.generals[generalIndex] = DEAD_GENERAL;
 		}
+        return succeeded
 	};
 
 	// Returns the index of an alive teammate of the given player, if any.
@@ -1103,11 +1140,6 @@
 		// Simulates the next turn.
 		game.nextTurn = function() {
 			// Put moves in the move queue.
-			while (replay.moves.length > currentMoveIndex && replay.moves[currentMoveIndex].turn <= game.turn) {
-				var move = replay.moves[currentMoveIndex++];
-				game.handleAttack(move.index, move.start, move.end, move.is50);
-			}
-
 			// Check for AFKs.
 			while (replay.afks.length > currentAFKIndex && replay.afks[currentAFKIndex].turn <= game.turn) {
 				var afk = replay.afks[currentAFKIndex++];
@@ -1123,6 +1155,15 @@
 					game.alivePlayers--;
 				}
 			}
+            // We don't need to change player order because replay files should be stored that way
+            //var i = this.turn % 2 === 0 ? sock : this.sockets.length - 1 - sock;
+			while (replay.moves.length > currentMoveIndex && replay.moves[currentMoveIndex].turn <= game.turn) {
+				var move = replay.moves[currentMoveIndex++];
+                move_ok=game.handleAttack(move.index, move.start, move.end, move.is50);
+                game.moved[move.index].moved=++game.number_of_moves[move.index];
+                game.moved[move.index].i=move.index;
+			}
+
 
 			game.update();
 		}
